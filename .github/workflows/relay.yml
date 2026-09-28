@@ -1,0 +1,39 @@
+name: Gremlin Wire Relay
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"   # every 10 minutes; GitHub may run a bit later than scheduled
+  workflow_dispatch: {}       # lets you trigger it manually from the Actions tab
+
+jobs:
+  relay:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Restore last-sent state
+        uses: actions/cache@v4
+        with:
+          path: last_sent.json
+          key: gremlin-wire-state-${{ github.run_id }}
+          restore-keys: |
+            gremlin-wire-state-
+
+      - name: Run relay
+        env:
+          GH_GIST_TOKEN: ${{ secrets.GH_GIST_TOKEN }}
+          TG_BOT_TOKEN: ${{ secrets.TG_BOT_TOKEN }}
+          TG_CHAT_ID: ${{ secrets.TG_CHAT_ID }}
+        run: node relay.js
+
+      - name: Commit updated state
+        run: |
+          git config user.name "gremlin-wire-relay"
+          git config user.email "actions@users.noreply.github.com"
+          git add last_sent.json || true
+          git diff --cached --quiet || git commit -m "Update last-sent state"
+          git push || true
